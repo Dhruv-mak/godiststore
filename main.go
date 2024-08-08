@@ -1,38 +1,38 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/Dhruv-mak/godiststore/p2p"
 )
 
-func Onpeer(peer p2p.Peer) error {
-	// fmt.Println("doing some logic with the peer outside the onpeer func")
-	peer.Close()
-	return nil
+func makeServer(listenAddr string, nodes ...string) *FileServer {
+	tCPTransportOpts := p2p.TCPTransportOpts{
+		ListenAddr:    listenAddr,
+		HandshakeFunc: p2p.NOPHandshakeFunc,
+		Decoder:       p2p.DefaultDecoder{},
+		// TODO: onpeer func
+	}
+	tcpTransport := p2p.NewTCPTransport(tCPTransportOpts)
+	fileServerOpts := FileServerOpts{
+		StorageRoot:       listenAddr + "_store",
+		PathTransformFunc: CASPathTransformFunc,
+		Transport:         tcpTransport,
+		BootstrapNodes:    nodes,
+	}
+	s := NewFileServer(fileServerOpts)
+	tcpTransport.OnPeer = s.OnPeer
+	return s
 }
 
 func main() {
-	tcpOpts := p2p.TCPTransportOpts{
-		ListenAddr:    ":5000",
-		HandshakeFunc: p2p.NOPHandshakeFunc,
-		Decoder:       p2p.DefaultDecoder{},
-		OnPeer:        Onpeer,
-	}
 
-	tr := p2p.NewTCPTransport(tcpOpts)
+	s1 := makeServer(":3000", "")
+	s2 := makeServer(":4000", ":3000")
 
 	go func() {
-		for {
-			msg := <-tr.Consume()
-			fmt.Printf("Received message: %s\n", msg.Payload)
-		}
+		log.Fatal(s1.Start())
 	}()
 
-	if err := tr.ListenAndAccept(); err != nil {
-		log.Fatal(err)
-	}
-
-	select {}
+	s2.Start()
 }
