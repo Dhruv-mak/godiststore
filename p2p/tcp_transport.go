@@ -16,35 +16,24 @@ type TCPPeer struct {
 	// if we accept and retrieve a conn => outbound == false
 	outbound bool
 
-	wg *sync.WaitGroup
+	// wg *sync.WaitGroup
 }
 
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	return &TCPPeer{
 		Conn:     conn,
 		outbound: outbound,
-		wg:       &sync.WaitGroup{},
+		// wg:       &sync.WaitGroup{},
 	}
 }
 
-func (p *TCPPeer) CloseStream() {
-	p.wg.Done()
-}
+// func (p *TCPPeer) CloseStream() {
+// 	p.wg.Done()
+// }
 
 func (p *TCPPeer) Send(b []byte) error {
 	_, err := p.Conn.Write(b)
 	return err
-}
-
-// RemoteAddr implements the Peer interface,
-// which will return the remote address underlying connection
-func (p *TCPPeer) RemoteAddr() net.Addr {
-	return p.Conn.RemoteAddr()
-}
-
-// Close implements the Peer interface, which will close the underlying connection
-func (p *TCPPeer) Close() error {
-	return p.Conn.Close()
 }
 
 type TCPTransportOpts struct {

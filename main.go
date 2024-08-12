@@ -35,4 +35,6 @@ func main() {
 	}()
 
 	s2.Start()
+
+	select {}
 }
