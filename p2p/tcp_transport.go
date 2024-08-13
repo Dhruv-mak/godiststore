@@ -16,14 +16,14 @@ type TCPPeer struct {
 	// if we accept and retrieve a conn => outbound == false
 	outbound bool
 
-	// wg *sync.WaitGroup
+	wg *sync.WaitGroup
 }
 
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	return &TCPPeer{
 		Conn:     conn,
 		outbound: outbound,
-		// wg:       &sync.WaitGroup{},
+		wg:       &sync.WaitGroup{},
 	}
 }
 
@@ -131,6 +131,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			return
 		}
 	}
+
 	// Read Loop
 	rpc := RPC{}
 	for {
@@ -140,7 +141,11 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			continue
 		}
 
-		rpc.From = conn.RemoteAddr()
+		rpc.From = conn.RemoteAddr().String()
+		peer.wg.Add(1)
+		fmt.Println("Waiting till stream is done")
 		t.rpcch <- rpc
+		peer.wg.Wait()
+		fmt.Println("stream done, continuing normal read loop")
 	}
 }
