@@ -79,10 +79,10 @@ func (s *FileServer) handleMessage(from string, msg *Message) error {
 
 func (s *FileServer) handleMessageGetfile(from string, msg MessageGetFile) error {
 	if !s.store.Has(msg.Key) {
-		fmt.Printf("need to serve file (%s) but it does not exist on disk \n", msg.Key)
+		fmt.Printf("[%s] need to serve file (%s) but it does not exist on disk \n", s.Transport.Addr(), msg.Key)
 	}
 
-	fmt.Printf("serving file (%s) over the network\n", msg.Key)
+	fmt.Printf("[%s] serving file (%s) over the network\n",s.Transport.Addr(), msg.Key)
 	r, err := s.store.Read(msg.Key)
 	if err != nil {
 		return err
@@ -93,12 +93,16 @@ func (s *FileServer) handleMessageGetfile(from string, msg MessageGetFile) error
 		return fmt.Errorf("peer (%s) not found in peer map", from)
 	}
 
+	peer.Send([]byte{p2p.IncomingStream})
+
 	n, err := io.Copy(peer, r)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("[%s] writted %d bytes to disk\n", n)
+	fmt.Printf("[%s] writted %d bytes over the network to %s\n", s.Transport.Addr(), n, from)
+
+	peer.CloseStream()
 
 	return nil
 }
@@ -140,10 +144,11 @@ type MessageGetFile struct {
 
 func (s *FileServer) Get(key string) (io.Reader, error) {
 	if s.store.Has(key) {
+		fmt.Printf("[%s] serving file (%s) from local disk\n", s.Transport.Addr(), key)
 		return s.store.Read(key)
 	}
 
-	fmt.Printf("dont have file (%s) locally, asking other peers", key)
+	fmt.Printf("[%s] dont have file (%s) locally, fetching from network", s.Transport.Addr(), key)
 
 	msg := Message{
 		Payload: MessageGetFile{
@@ -155,15 +160,18 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 		return nil, err
 	}
 
+	time.Sleep(time.Millisecond * 500)
+
 	for _, peer := range s.peers {
-		fmt.Println("receiving file from peer: ", peer.RemoteAddr().String())
 		fileBuffer := new(bytes.Buffer)
 		n, err := io.Copy(fileBuffer, peer)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("received %d bytes over the network\n", n)
+		fmt.Printf("[%s] received %d bytes over the network from (%s)\n", s.Transport.Addr(), n, peer.RemoteAddr().String())
 		fmtPrintln(fileBuffer.String())
+
+		peer.CloseStream()
 	}
 
 	select {}
