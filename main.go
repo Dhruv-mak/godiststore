@@ -1,8 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"io"
+	"bytes"
 	"log"
 	"time"
 
@@ -18,6 +17,7 @@ func makeServer(listenAddr string, nodes ...string) *FileServer {
 	}
 	tcpTransport := p2p.NewTCPTransport(tCPTransportOpts)
 	fileServerOpts := FileServerOpts{
+		EncKey:            newEncryptionKey(),
 		StorageRoot:       listenAddr + "_store",
 		PathTransformFunc: CASPathTransformFunc,
 		Transport:         tcpTransport,
@@ -42,19 +42,19 @@ func main() {
 	go s2.Start()
 	time.Sleep(2 * time.Second)
 
-	// data := bytes.NewReader([]byte("my big data file here!"))
-	// s2.Store("nice_pic.jpg", data)
-	// time.Sleep(5 * time.Millisecond)
+	data := bytes.NewReader([]byte("my big data file here!"))
+	s2.Store("nice_pic.jpg", data)
+	time.Sleep(5 * time.Millisecond)
 
-	r, err := s2.Get("coolPicture.jpg")
-	if err != nil {
-		log.Fatal(err)
-	}
+	// r, err := s2.Get("coolPicture.jpg")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	b, err := io.ReadAll(r)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(b))
+	// b, err := io.ReadAll(r)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// fmt.Println(string(b))
 
 }
