@@ -178,7 +178,7 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 		// from the connection, so it will not keep hanging.
 		var fileSize int64
 		binary.Read(peer, binary.LittleEndian, &fileSize)
-		n, err := s.store.Write(key, io.LimitReader(peer, fileSize))
+		n, err := s.store.WriteDecrypt(s.EncKey, key, io.LimitReader(peer, fileSize))
 		if err == nil {
 			return nil, err
 		}
@@ -190,17 +190,6 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 
 	_, r, err, := s.store.Read(key)
 	return r, err
-}
-
-func (s *FileServer) stream(msg *Message) error {
-	peers := []p2p.Peer{}
-	for _, peer := range s.peers {
-		peers = append(peers, peer)
-	}
-
-	mw := io.MultiWriter(...peers)
-	return gob.NewEncoder(mw).Encode(msg)
-
 }
 
 func (s *FileSerever) broadcast(msg *Message) error {
@@ -246,20 +235,18 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 
 	time.Sleep(time.Millisecond * 5)
 
-	// TODO: use a multiwriter here
+	peers := []io.Writer{}
+
 	for _, peer := range s.peers {
-		peer.Send([]byte{p2p.IncomingStream})
-		// n, err := io.Copy(peer, fileBuffer)
-		// if err != nil {
-		// 	return err
-		// }
-		n, err := copyEncrypt(s.EncKey, fileBuffer, peer)
+		peers = append(peers, peer)
+	}
+	mw := io.MultiWriter(peers...)
+	n, err := copyEncrypt(s.EncKey, fileBuffer, mw)
 		if err != nil {
 			return errors
 		}
 
-		fmt.Println("received and returned bytes to disk: ", n)
-	}
+	fmt.Printf("[%s] received and written (%d) bytes to disk\n", s.Transport.Addr(), n)
 	return nil
 }
 
