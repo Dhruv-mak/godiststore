@@ -56,6 +56,9 @@ func (p PathKey) Fullpath() string {
 type StoreOpts struct {
 	// Root is the folder name of th root, containing all the folder/files in the store
 	Root              string
+	// ID of the owner of the storage, which will be used to store all files at that location
+	// so we can sync all the files if needed.
+	ID string
 	PathTransformFunc PathTransformFunc
 }
 
@@ -77,6 +80,9 @@ func NewStore(opts StoreOpts) *Store {
 	if len(opts.Root) == 0 {
 		opts.Root = defaultRootFolderName
 	}
+	if len(opts.ID) == 0 {
+		opts.ID = generateID()
+	}
 	return &Store{
 		StoreOpts: opts,
 	}
@@ -84,7 +90,7 @@ func NewStore(opts StoreOpts) *Store {
 
 func (s *Store) Has(key string) bool {
 	pathKey := s.PathTransformFunc(key)
-	fullPathWithRoot := fmt.Sprintf("%s/%s", s.Root, pathKey.Fullpath())
+	fullPathWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, s.ID, pathKey.Fullpath())
 
 	_, err := os.Stat(fullPathWithRoot)
 	return !errors.Is(err, os.ErrNotExist)
@@ -101,7 +107,7 @@ func (s *Store) Delete(key string) error {
 		log.Printf("deleted [%s] from disk", pathKey.Fullpath())
 	}()
 
-	firstPathNameWithRoot := fmt.Sprintf("%s/%s", s.Root, pathKey.FirstPathName())
+	firstPathNameWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, s.ID, pathKey.FirstPathName())
 
 	return os.RemoveAll(firstPathNameWithRoot)
 }
@@ -128,7 +134,7 @@ func (s *Store) Read(key string) (int64, io.Reader, error) {
 
 func (s *Store) readStream(key string) (int64, io.ReadCloser, error) {
 	pathKey := s.PathTransformFunc(key)
-	fullPathWithRoot := fmt.Sprintf("%s/%s", s.Root, pathKey.Fullpath())
+	fullPathWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, s.ID, pathKey.Fullpath())
 
 	// fi, err := os.Stat(fullPathWithRoot)
 	// if err != nil {
@@ -149,14 +155,14 @@ func (s *Store) readStream(key string) (int64, io.ReadCloser, error) {
 	
 }
 
-func (s *Store) openFileForWriting(key string) (*os.File error) {
+func (s *Store) openFileForWriting(key string) (*os.File, error) {
 	pathKey := s.PathTransformFunc(key)
-	pathNameWithRoot := fmt.Sprintf("%s/%s", s.Root, pathKey.Pathname)
+	pathNameWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, s.ID, pathKey.Pathname)
 	if err := os.MkdirAll(pathNameWithRoot, os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	fullPathWithRoot := fmt.Sprintf("%s/%s", s.Root, pathKey.Fullpath())
+	fullPathWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, s.ID, pathKey.Fullpath())
 
 	return os.Create(fullPathWithRoot)
 }
