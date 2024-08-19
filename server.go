@@ -13,6 +13,7 @@ import (
 	"github.com/Dhruv-mak/godiststore/p2p"
 )
 
+// FileServerOpts holds the configuration options for the FileServer.
 type FileServerOpts struct {
 	ID                string
 	EncKey            []byte
@@ -22,6 +23,7 @@ type FileServerOpts struct {
 	BootstrapNodes    []string
 }
 
+// FileServer represents a file server that can store and retrieve files over a P2P network.
 type FileServer struct {
 	FileServerOpts
 
@@ -31,6 +33,7 @@ type FileServer struct {
 	quitch   chan struct{}
 }
 
+// NewFileServer creates a new FileServer with the given options.
 func NewFileServer(opts FileServerOpts) *FileServer {
 	storeOpts := StoreOpts{
 		Root:              opts.StorageRoot,
@@ -49,6 +52,7 @@ func NewFileServer(opts FileServerOpts) *FileServer {
 	}
 }
 
+// broadcast sends a message to all connected peers.
 func (s *FileServer) broadcast(msg *Message) error {
 	buf := new(bytes.Buffer)
 	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
@@ -65,21 +69,25 @@ func (s *FileServer) broadcast(msg *Message) error {
 	return nil
 }
 
+// Message represents a generic message with a payload.
 type Message struct {
 	Payload any
 }
 
+// MessageStoreFile represents a message to store a file.
 type MessageStoreFile struct {
 	ID   string
 	Key  string
 	Size int64
 }
 
+// MessageGetFile represents a message to get a file.
 type MessageGetFile struct {
 	ID  string
 	Key string
 }
 
+// Get retrieves a file from the local store or the network.
 func (s *FileServer) Get(key string) (io.Reader, error) {
 	if s.store.Has(s.ID, key) {
 		fmt.Printf("[%s] serving file (%s) from local disk\n", s.Transport.Addr(), key)
@@ -87,7 +95,7 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 		return r, err
 	}
 
-	fmt.Printf("[%s] dont have file (%s) locally, fetching from network...\n", s.Transport.Addr(), key)
+	fmt.Printf("[%s] don't have file (%s) locally, fetching from network...\n", s.Transport.Addr(), key)
 
 	msg := Message{
 		Payload: MessageGetFile{
@@ -103,8 +111,6 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 	time.Sleep(time.Millisecond * 500)
 
 	for _, peer := range s.peers {
-		// First read the file size so we can limit the amount of bytes that we read
-		// from the connection, so it will not keep hanging.
 		var fileSize int64
 		binary.Read(peer, binary.LittleEndian, &fileSize)
 
@@ -113,7 +119,7 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 			return nil, err
 		}
 
-		fmt.Printf("[%s] received (%d) bytes over the network from (%s)", s.Transport.Addr(), n, peer.RemoteAddr())
+		fmt.Printf("[%s] received (%d) bytes over the network from (%s)\n", s.Transport.Addr(), n, peer.RemoteAddr())
 
 		peer.CloseStream()
 	}
@@ -122,6 +128,7 @@ func (s *FileServer) Get(key string) (io.Reader, error) {
 	return r, err
 }
 
+// Store stores a file in the local store and broadcasts it to the network.
 func (s *FileServer) Store(key string, r io.Reader) error {
 	var (
 		fileBuffer = new(bytes.Buffer)
@@ -163,10 +170,12 @@ func (s *FileServer) Store(key string, r io.Reader) error {
 	return nil
 }
 
+// Stop stops the file server.
 func (s *FileServer) Stop() {
 	close(s.quitch)
 }
 
+// OnPeer handles a new peer connection.
 func (s *FileServer) OnPeer(p p2p.Peer) error {
 	s.peerLock.Lock()
 	defer s.peerLock.Unlock()
@@ -178,6 +187,7 @@ func (s *FileServer) OnPeer(p p2p.Peer) error {
 	return nil
 }
 
+// loop runs the main loop of the file server.
 func (s *FileServer) loop() {
 	defer func() {
 		log.Println("file server stopped due to error or user quit action")
@@ -201,6 +211,7 @@ func (s *FileServer) loop() {
 	}
 }
 
+// handleMessage handles incoming messages based on their type.
 func (s *FileServer) handleMessage(from string, msg *Message) error {
 	switch v := msg.Payload.(type) {
 	case MessageStoreFile:
@@ -212,6 +223,7 @@ func (s *FileServer) handleMessage(from string, msg *Message) error {
 	return nil
 }
 
+// handleMessageGetFile handles a request to get a file.
 func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error {
 	if !s.store.Has(msg.ID, msg.Key) {
 		return fmt.Errorf("[%s] need to serve file (%s) but it does not exist on disk", s.Transport.Addr(), msg.Key)
@@ -225,7 +237,6 @@ func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error
 	}
 
 	if rc, ok := r.(io.ReadCloser); ok {
-		fmt.Println("closing readCloser")
 		defer rc.Close()
 	}
 
@@ -234,8 +245,6 @@ func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error
 		return fmt.Errorf("peer %s not in map", from)
 	}
 
-	// First send the "incomingStream" byte to the peer and then we can send
-	// the file size as an int64.
 	peer.Send([]byte{p2p.IncomingStream})
 	binary.Write(peer, binary.LittleEndian, fileSize)
 	n, err := io.Copy(peer, r)
@@ -248,6 +257,7 @@ func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error
 	return nil
 }
 
+// handleMessageStoreFile handles a request to store a file.
 func (s *FileServer) handleMessageStoreFile(from string, msg MessageStoreFile) error {
 	peer, ok := s.peers[from]
 	if !ok {
@@ -266,6 +276,7 @@ func (s *FileServer) handleMessageStoreFile(from string, msg MessageStoreFile) e
 	return nil
 }
 
+// bootstrapNetwork connects to bootstrap nodes to join the network.
 func (s *FileServer) bootstrapNetwork() error {
 	for _, addr := range s.BootstrapNodes {
 		if len(addr) == 0 {
@@ -273,7 +284,7 @@ func (s *FileServer) bootstrapNetwork() error {
 		}
 
 		go func(addr string) {
-			fmt.Printf("[%s] attemping to connect with remote %s\n", s.Transport.Addr(), addr)
+			fmt.Printf("[%s] attempting to connect with remote %s\n", s.Transport.Addr(), addr)
 			if err := s.Transport.Dial(addr); err != nil {
 				log.Println("dial error: ", err)
 			}
@@ -283,13 +294,13 @@ func (s *FileServer) bootstrapNetwork() error {
 	return nil
 }
 
+// Start starts the file server.
 func (s *FileServer) Start() error {
 	fmt.Printf("[%s] starting fileserver...\n", s.Transport.Addr())
 
 	if err := s.Transport.ListenAndAccept(); err != nil {
 		return err
 	}
-
 	s.bootstrapNetwork()
 
 	s.loop()

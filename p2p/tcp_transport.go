@@ -116,6 +116,15 @@ func (t *TCPTransport) startAcceptLoop() {
 	}
 }
 
+// handleConn handles an incoming or outgoing TCP connection.
+// It performs a handshake, invokes the OnPeer callback if set, and enters a read loop to process RPCs.
+//
+// Parameters:
+//
+//	conn - The net.Conn representing the TCP connection.
+//	outbound - A boolean indicating if the connection is outbound.
+//
+// The function will close the connection and log an error message if any error occurs during processing.
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
 
